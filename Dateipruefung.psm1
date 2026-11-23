@@ -26,8 +26,17 @@ function Invoke-DuplicateScan {
     $script:CurrentScan = $null
     $resolvedPath = (Get-Item -LiteralPath $Path -Force -ErrorAction Stop).FullName
     $scanErrors = @()
+    $webEndungen = [Collections.Generic.HashSet[string]]::new([string[]]@(
+        '.html', '.htm', '.shtml', '.xhtml',
+        '.php', '.php3', '.php4', '.php5', '.php7', '.php8', '.phtml', '.phps',
+        '.css', '.scss', '.sass', '.less', '.js', '.mjs', '.cjs', '.jsx', '.tsx',
+        '.vue', '.svelte', '.astro', '.twig', '.ejs', '.hbs',
+        '.asp', '.aspx', '.ascx', '.cshtml', '.razor', '.jsp', '.jspx',
+        '.htaccess', '.htpasswd'
+    ), [StringComparer]::OrdinalIgnoreCase)
     $files = @(
-        Get-Quelldateien -ordner $resolvedPath -ErrorAction SilentlyContinue -ErrorVariable +scanErrors
+        Get-Quelldateien -ordner $resolvedPath -ErrorAction SilentlyContinue -ErrorVariable +scanErrors |
+            Where-Object { -not $webEndungen.Contains($_.Extension) }
     )
     $sizeGroups = @(
         $files | Group-Object -Property Length | Where-Object { $_.Count -gt 1 }

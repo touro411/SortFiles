@@ -132,7 +132,7 @@
     el('sortTool').setAttribute('aria-pressed', String(!duplicates));
     el('duplicateTool').setAttribute('aria-pressed', String(duplicates));
     el('title').textContent = duplicates ? 'Duplikate finden' : 'Dateien sortieren';
-    el('intro').textContent = duplicates ? 'Vergleiche Dateien im Quellordner und seinen Unterordnern. Wähle in der Vorschau für jede Gruppe den Pfad aus, an dem die Datei bleiben soll.' : sortIntro;
+    el('intro').textContent = duplicates ? 'Die Suche überspringt Webdateien wie HTML, PHP, CSS und JavaScript. Wähle in der Vorschau für jede Duplikatgruppe den Pfad aus, an dem die Datei bleiben soll.' : sortIntro;
     el('sortActions').hidden = el('structure').hidden = duplicates;
     el('duplicateActions').hidden = !duplicates;
     resetResults();

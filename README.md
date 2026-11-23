@@ -25,6 +25,8 @@ Beim Start übernimmt das Programm die verbundenen Netzlaufwerke der aufrufenden
 
 Wähle oben neben **Dateisortierer** die **Duplikatsuche**. Beide Werkzeuge verwenden denselben Quellordner und dieselbe Ordnerauswahl. Mit **Duplikate suchen** prüfst du den Ordner samt Unterordnern. Das Werkzeug vergleicht zunächst die Dateigröße und anschließend bei gleich großen Dateien den SHA-256-Hash des Inhalts.
 
+Die Duplikatsuche überspringt typische Webdateien anhand ihrer Endung, darunter HTML, PHP, CSS, JavaScript und Vorlagen wie Twig. So bleiben inhaltsgleiche Kopien in verschiedenen Website-Ordnern erhalten. Die vollständige Liste steht unter `$webEndungen` in [Dateipruefung.psm1](./Dateipruefung.psm1).
+
 In der Vorschau ist pro Gruppe der alphabetisch erste Pfad zum **Behalten** vorausgewählt. Klicke auf den gewünschten Dateipfad, um die Auswahl zu ändern. Alle übrigen Pfade der Gruppe sind mit **Löschen** markiert. Erst mit **Angezeigte Kopien löschen …** und deiner Bestätigung entfernst du diese Kopien endgültig. Vor dem Löschen prüft das Werkzeug die Inhalte erneut. Hat sich die ausgewählte Datei geändert oder fehlt sie, wird die gesamte Gruppe übersprungen. Das Ergebnis nennt gelöschte und übersprungene Dateien sowie Fehler.
 
 Du kannst auch direkt mit `.\delete_duplicates.ps1` in die Duplikatsuche einsteigen. Mit `-InitialPath 'D:\Sammlung'` belegst du den Quellordner vor.
