@@ -15,9 +15,15 @@
   header nav button[aria-pressed="true"] { color: #194a92; background: #e4ecf8 }
   [hidden] { display: none !important }
   .danger { color: #922d29; border-color: #b46b64 }
-  #duplicateList li { margin: .45rem 0 }
+  #duplicateList { margin: 0; padding: 0; border: 0; min-width: 0 }
   #duplicateList details { padding: .6rem 0; border-top: 1px solid #dbe2ea }
   #duplicateList summary { cursor: pointer; overflow-wrap: anywhere }
+  .copies { margin-top: .6rem }
+  .copies label { display: grid; grid-template-columns: auto 1fr auto; align-items: baseline; gap: .65rem; padding: .45rem; margin: 0; font-weight: 400; cursor: pointer; overflow-wrap: anywhere }
+  .copies input { min-height: 0; margin: 0; accent-color: #245bad }
+  .copies label:has(:checked) { background: #eef3f9 }
+  .copies label::after { content: 'Löschen'; color: #922d29 }
+  .copies label:has(:checked)::after { content: 'Behalten'; color: #194a92; font-weight: 650 }
   .folder { display: inline-block; position: relative; width: 1.5rem; height: 1rem; margin-top: .25rem; border-radius: 2px 3px 3px 3px; background: var(--ink, #2866bb) }
   .folder::before { content: ""; position: absolute; left: 0; top: -.23rem; width: 48%; height: .3rem; border-radius: 2px 3px 0 0; background: inherit }
   h1 { margin: 3.2rem 0 .4rem; font-size: clamp(2.1rem,5vw,3.4rem); letter-spacing: -.055em; line-height: 1.12 }
@@ -76,7 +82,7 @@
   </section>
   <section class="panel" id="duplicateResult" hidden>
     <h2 id="duplicateTitle">Gefundene Duplikate</h2><p id="duplicateSummary"></p>
-    <div id="duplicateList"></div>
+    <fieldset id="duplicateList" aria-labelledby="duplicateTitle"></fieldset>
     <div class="actions" id="deleteActions" hidden><button class="danger" id="deleteCopies">Angezeigte Kopien löschen …</button></div>
   </section>
   <section class="panel" id="structure">
@@ -126,7 +132,7 @@
     el('sortTool').setAttribute('aria-pressed', String(!duplicates));
     el('duplicateTool').setAttribute('aria-pressed', String(duplicates));
     el('title').textContent = duplicates ? 'Duplikate finden' : 'Dateien sortieren';
-    el('intro').textContent = duplicates ? 'Vergleiche Dateien im Quellordner und seinen Unterordnern. Bei identischem Inhalt bleibt der alphabetisch erste Pfad erhalten.' : sortIntro;
+    el('intro').textContent = duplicates ? 'Vergleiche Dateien im Quellordner und seinen Unterordnern. Wähle in der Vorschau für jede Gruppe den Pfad aus, an dem die Datei bleiben soll.' : sortIntro;
     el('sortActions').hidden = el('structure').hidden = duplicates;
     el('duplicateActions').hidden = !duplicates;
     resetResults();
@@ -136,6 +142,7 @@
     path.disabled = el('browse').disabled = el('exit').disabled = el('sortTool').disabled = el('duplicateTool').disabled = locked;
     el('scan').disabled = el('preview').disabled = el('move').disabled = locked || !path.value.trim();
     el('deleteCopies').disabled = locked || !scan?.DeleteCount;
+    el('duplicateList').disabled = locked;
   }
   function status(message, error = false) {
     el('status').classList.toggle('error', error);
@@ -198,13 +205,25 @@
         const details = document.createElement('details');
         details.open = data.GroupCount <= 10;
         const label = document.createElement('summary');
-        label.textContent = group.Keep.Name + ' (' + (1 + group.Delete.length) + ' Dateien)';
-        const paths = document.createElement('ul');
-        for (const [action, file] of [['Behalten', group.Keep], ...group.Delete.map(file => ['Löschen', file])]) {
-          const row = document.createElement('li');
-          const prefix = document.createElement('strong');
-          prefix.textContent = action + ' · ';
-          row.append(prefix, file.Path);
+        const files = [group.Keep, ...group.Delete];
+        const updateSummary = file => { label.textContent = file.Name + ' (' + files.length + ' Dateien)'; };
+        updateSummary(group.Keep);
+        const paths = document.createElement('div');
+        paths.className = 'copies';
+        paths.setAttribute('role', 'radiogroup');
+        paths.setAttribute('aria-label', 'Datei zum Behalten auswählen');
+        for (const [index, file] of files.entries()) {
+          const row = document.createElement('label');
+          const radio = document.createElement('input');
+          radio.type = 'radio';
+          radio.name = 'keep-' + group.Number;
+          radio.value = String(index);
+          radio.checked = index === 0;
+          radio.setAttribute('aria-label', file.Path + ' behalten');
+          radio.onchange = () => updateSummary(file);
+          const displayPath = document.createElement('span');
+          displayPath.textContent = file.Path;
+          row.append(radio, displayPath);
           paths.append(row);
         }
         details.append(label, paths);
@@ -302,7 +321,8 @@
   el('scan').onclick = () => { resetResults(); run('duplikate/suchen', 'Dateigrößen und Inhalte werden verglichen …'); };
   el('deleteCopies').onclick = () => {
     if (scan && confirm(scan.DeleteCount + ' Kopien in diesem Ordner endgültig löschen?\n\n' + scan.RootPath + '\n\nDie als „Behalten“ markierten Dateien bleiben erhalten.')) {
-      run('duplikate/loeschen', 'Kopien werden erneut geprüft und gelöscht …', JSON.stringify({scanId: scan.ScanId, confirmed: true}));
+      const keepIndices = Array.from(el('duplicateList').querySelectorAll('input:checked'), radio => Number(radio.value));
+      run('duplikate/loeschen', 'Kopien werden erneut geprüft und gelöscht …', JSON.stringify({scanId: scan.ScanId, confirmed: true, keepIndices}));
     }
   };
   if (start.has('pfad')) path.value = start.get('pfad');

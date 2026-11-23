@@ -151,7 +151,8 @@ function Open-VerifiedFile($entry, [string]$root, [IO.FileShare]$share) {
 function Invoke-ConfirmedDeletion {
     param(
         [Parameter(Mandatory = $true)][string]$ScanId,
-        [Parameter(Mandatory = $true)][bool]$Confirmed
+        [Parameter(Mandatory = $true)][bool]$Confirmed,
+        $KeepIndices
     )
 
     if (-not $Confirmed) {
@@ -168,20 +169,39 @@ function Invoke-ConfirmedDeletion {
     $freedBytes = [int64]0
 
     $scan = $script:CurrentScan
+    $hasSelection = $PSBoundParameters.ContainsKey('KeepIndices')
+    if ($hasSelection) {
+        if ($KeepIndices -isnot [array] -or $KeepIndices.Count -ne $scan.Groups.Count) {
+            throw 'Wähle für jede Duplikatgruppe genau eine Datei zum Behalten aus.'
+        }
+        foreach ($group in $scan.Groups) {
+            $index = $KeepIndices[$group.Number - 1]
+            if (($index -isnot [int] -and $index -isnot [long]) -or $index -lt 0 -or $index -gt $group.Delete.Count) {
+                throw 'Die ausgewählte Datei gehört nicht zur angezeigten Duplikatgruppe.'
+            }
+        }
+    }
     $script:CurrentScan = $null
     foreach ($group in $scan.Groups) {
+        $keep = $group.Keep
+        $copies = $group.Delete
+        if ($hasSelection -and ($index = $KeepIndices[$group.Number - 1]) -gt 0) {
+            $keep = $group.Delete[$index - 1]
+            $copies = $group.Delete.Clone()
+            $copies[$index - 1] = $group.Keep
+        }
         try {
             # Die verbleibende Kopie während der gesamten Gruppe gegen Schreiben und Löschen sperren.
-            $keeper = Open-VerifiedFile $group.Keep $scan.RootPath ([IO.FileShare]::Read)
+            $keeper = Open-VerifiedFile $keep $scan.RootPath ([IO.FileShare]::Read)
         } catch {
-            foreach ($duplicate in $group.Delete) {
+            foreach ($duplicate in $copies) {
                 $skippedCount++
                 $results.Add([PSCustomObject]@{ Path = $duplicate.Path; Status = 'skipped'; Message = "Verbleibende Datei konnte nicht bestätigt werden: $_" })
             }
             continue
         }
         try {
-            foreach ($duplicate in $group.Delete) {
+            foreach ($duplicate in $copies) {
                 try {
                     $copy = Open-VerifiedFile $duplicate $scan.RootPath ([IO.FileShare]'Read, Delete')
                 } catch {

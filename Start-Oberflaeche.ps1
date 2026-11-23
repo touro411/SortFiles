@@ -187,6 +187,7 @@ try {
         else { Start-Process -FilePath (Find-Chrome) -ArgumentList "--new-window `"$adresse`"" }
     }
     $aktiv = $true
+    $loeschauftragLimit = 131072
     while ($aktiv) {
         $eingang = $listener.BeginGetContext($null, $null)
         if (-not $eingang.AsyncWaitHandle.WaitOne([timespan]::FromMinutes(30))) { break }
@@ -218,8 +219,9 @@ try {
                 switch ($route) {
                     '/standardordner' { $daten = @{ pfad = ''; eltern = ''; ordner = @($standardordner) } }
                     { $_ -in '/ordner', '/vorschau', '/verschieben', '/duplikate/suchen', '/duplikate/loeschen' } {
-                        if ($anfrage.ContentLength64 -lt 0 -or $anfrage.ContentLength64 -gt 131072) {
-                            throw 'Ungültige Pfadangabe.'
+                        $limit = if ($route -eq '/duplikate/loeschen') { $loeschauftragLimit } else { 131072 }
+                        if ($anfrage.ContentLength64 -lt 0 -or $anfrage.ContentLength64 -gt $limit) {
+                            throw 'Ungültige Anfragegröße.'
                         }
                         $leser = [IO.StreamReader]::new($anfrage.InputStream, [Text.Encoding]::UTF8)
                         try { $text = $leser.ReadToEnd() } finally { $leser.Dispose() }
@@ -234,11 +236,13 @@ try {
                                 Clear-DuplicateScan
                                 $quelle = Resolve-Quellordner $text
                                 $daten = Invoke-DuplicateScan -Path $quelle.FullName
+                                # Auch große Vorschauen können einen Dateiindex pro Gruppe übermitteln.
+                                $loeschauftragLimit = 131072 + 12L * $daten.GroupCount
                             }
                             '/duplikate/loeschen' {
                                 $auftrag = ConvertFrom-Json $text
                                 $bestaetigt = $auftrag.confirmed -is [bool] -and $auftrag.confirmed
-                                $daten = Invoke-ConfirmedDeletion -ScanId $auftrag.scanId -Confirmed $bestaetigt
+                                $daten = Invoke-ConfirmedDeletion -ScanId $auftrag.scanId -Confirmed $bestaetigt -KeepIndices $auftrag.keepIndices
                             }
                         }
                     }
