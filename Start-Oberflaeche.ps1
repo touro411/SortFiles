@@ -6,6 +6,7 @@ param(
     [guid]$Sitzung,
     [guid]$Startkennung,
     [string]$Netzlaufwerke,
+    [string]$Benutzerordner,
     [switch]$Duplikatstart,
     [string]$InitialPath,
     [switch]$NoBrowser
@@ -33,6 +34,24 @@ function Find-Chrome {
     throw 'Google Chrome wurde nicht gefunden. Bitte installiere Google Chrome und öffne Start.cmd erneut.'
 }
 
+function Get-Standardordner {
+    # Downloads hat in .NET Framework keinen SpecialFolder-Eintrag.
+    $schluessel = Get-Item -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders' -ErrorAction SilentlyContinue
+    $downloads = if ($schluessel) { $schluessel.GetValue('{374DE290-123F-4565-9164-39C4925E467B}') }
+    if (-not $downloads) { $downloads = Join-Path ([Environment]::GetFolderPath('UserProfile')) 'Downloads' }
+    $pfade = [ordered]@{
+        Dokumente = [Environment]::GetFolderPath('MyDocuments', 'DoNotVerify')
+        Downloads = $downloads
+        Desktop   = [Environment]::GetFolderPath('DesktopDirectory', 'DoNotVerify')
+        Bilder    = [Environment]::GetFolderPath('MyPictures', 'DoNotVerify')
+        Musik     = [Environment]::GetFolderPath('MyMusic', 'DoNotVerify')
+        Videos    = [Environment]::GetFolderPath('MyVideos', 'DoNotVerify')
+    }
+    foreach ($name in $pfade.Keys) {
+        if ($pfade[$name]) { @{ name = $name; pfad = $pfade[$name] } }
+    }
+}
+
 if (-not $Server) {
     if (-not $Port) {
         $probe = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
@@ -55,7 +74,10 @@ if (-not $Server) {
 }
 if (-not $Server -and -not $Duplikatstart) {
     $argumente = "-NoProfile -STA -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Server -Port $Port -Sitzung $Sitzung -Startkennung $Startkennung"
-    $argumente += " -Netzlaufwerke $Netzlaufwerke"
+    # Vor der UAC-Abfrage ermitteln, auch wenn später ein anderes Konto bestätigt.
+    $ordnerJson = ConvertTo-Json -InputObject @(Get-Standardordner) -Compress
+    $Benutzerordner = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($ordnerJson))
+    $argumente += " -Netzlaufwerke $Netzlaufwerke -Benutzerordner $Benutzerordner"
     $dienst = Start-Process -FilePath "$PSHOME\powershell.exe" -Verb RunAs -WindowStyle Hidden -ArgumentList $argumente -PassThru
     $client = [Net.WebClient]::new()
     $client.Proxy = $null
@@ -87,6 +109,9 @@ $ursprung = "http://127.0.0.1:$Port"
 $sortierer = Join-Path $PSScriptRoot 'Sortiere-Dateien.ps1'
 Import-Module (Join-Path $PSScriptRoot 'Dateipruefung.psm1')
 $seite = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Oberflaeche.html'))
+$standardordner = if ($Benutzerordner) {
+    [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Benutzerordner)) | ConvertFrom-Json
+} else { Get-Standardordner }
 
 $freigaben = @{}
 if ($Netzlaufwerke) {
@@ -191,6 +216,7 @@ try {
                 $inhalt = '{"fehler":"Öffne die Oberfläche über Start.cmd."}'
             } else {
                 switch ($route) {
+                    '/standardordner' { $daten = @{ pfad = ''; eltern = ''; ordner = @($standardordner) } }
                     { $_ -in '/ordner', '/vorschau', '/verschieben', '/duplikate/suchen', '/duplikate/loeschen' } {
                         if ($anfrage.ContentLength64 -lt 0 -or $anfrage.ContentLength64 -gt 131072) {
                             throw 'Ungültige Pfadangabe.'

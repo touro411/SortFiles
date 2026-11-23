@@ -96,7 +96,7 @@
     <label for="address">Ordnerpfad</label>
     <div class="field"><input id="address" placeholder="Laufwerk oder UNC-Pfad einfügen" spellcheck="false" autocomplete="off"><button>Öffnen</button></div>
   </form>
-  <div class="actions"><button id="drives">Laufwerke</button><button id="up">Übergeordneter Ordner</button></div>
+  <div class="actions"><button id="drives">Laufwerke</button><button id="standardFolders">Standardordner</button><button id="up">Übergeordneter Ordner</button></div>
   <p id="pickerStatus" role="status"></p>
   <div class="locations" id="folders"></div>
   <div class="actions"><button class="primary" id="choose" disabled>Diesen Ordner übernehmen</button><button id="cancel">Abbrechen</button></div>
@@ -240,7 +240,7 @@
   const address = el('address');
   let current = null;
   let navigation = 0;
-  async function openFolder(folder) {
+  async function openFolder(folder, route = 'ordner') {
     const sequence = ++navigation;
     current = null;
     address.value = folder;
@@ -249,12 +249,16 @@
     el('pickerStatus').classList.remove('error');
     el('pickerStatus').textContent = 'Ordner werden geladen …';
     try {
-      const data = await request('ordner', folder);
+      const data = await request(route, folder);
       if (sequence !== navigation || !picker.open) return;
       current = data;
       address.value = data.pfad;
       el('choose').disabled = el('up').disabled = !data.pfad;
-      el('pickerStatus').textContent = data.pfad ? (data.ordner.length ? 'Unterordner' : 'Keine Unterordner vorhanden.') : 'Verfügbare Laufwerke';
+      if (route === 'standardordner') {
+        el('pickerStatus').textContent = data.ordner.length ? 'Persönliche Standardordner' : 'Keine Standardordner verfügbar.';
+      } else {
+        el('pickerStatus').textContent = data.pfad ? (data.ordner.length ? 'Unterordner' : 'Keine Unterordner vorhanden.') : 'Verfügbare Laufwerke';
+      }
       const list = document.createDocumentFragment();
       for (const child of data.ordner) {
         const button = document.createElement('button');
@@ -271,6 +275,7 @@
   }
   el('browse').onclick = () => { picker.showModal(); openFolder(path.value.trim()); };
   el('drives').onclick = () => openFolder('');
+  el('standardFolders').onclick = () => openFolder('', 'standardordner');
   el('up').onclick = () => openFolder(current.eltern);
   el('addressForm').onsubmit = event => { event.preventDefault(); openFolder(address.value.trim()); };
   address.oninput = () => {

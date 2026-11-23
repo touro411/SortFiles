@@ -14,7 +14,7 @@ Quellordner\
 ## Mit der Oberfläche starten
 
 1. Doppelklicke auf **Start.cmd** und bestätige die Windows-Abfrage der Benutzerkontensteuerung (UAC). Die CMD-Datei fordert beim Start Administratorrechte für den lokalen Sortierdienst an. Ob Windows einen Dialog zeigt, hängt von den UAC-Einstellungen und den bereits vorhandenen Rechten ab.
-2. Füge in Chrome einen lokalen Pfad wie **D:\Sammlung**, einen Netzlaufwerkspfad wie **Z:\Musik** oder einen UNC-Pfad wie **\\Server\Freigabe\Musik** ins Feld **Quellordner** ein. Auch die Anführungszeichen aus „Als Pfad kopieren“ sind zulässig. Alternativ öffnet **Ordner auswählen …** einen Dialog direkt vor der Seite. Klicke auf ein Laufwerk, öffne bei Bedarf Unterordner und bestätige mit **Diesen Ordner übernehmen**.
+2. Füge in Chrome einen lokalen Pfad wie **D:\Sammlung**, einen Netzlaufwerkspfad wie **Z:\Musik** oder einen UNC-Pfad wie **\\Server\Freigabe\Musik** ins Feld **Quellordner** ein. Auch die Anführungszeichen aus „Als Pfad kopieren“ sind zulässig. Alternativ öffnet **Ordner auswählen …** einen Dialog direkt vor der Seite. Unter **Laufwerke** findest du die verbundenen Laufwerke. Über **Standardordner** öffnest du direkt Dokumente, Downloads, Desktop, Bilder, Musik oder Videos deines Windows-Kontos. Öffne bei Bedarf einen Unterordner und bestätige mit **Diesen Ordner übernehmen**.
 3. Klicke auf **Vorschau anzeigen**, um die geplanten Zielpfade zu prüfen. Die Vorschau liest die Dateien. Alle Änderungen erfolgen erst mit **Dateien verschieben** und deiner Bestätigung.
 4. Über **Sitzung beenden** schließt du den lokalen Dienst. Wenn du nur das Browserfenster schließt, beendet er sich nach 30 Minuten ohne Anfrage.
 
