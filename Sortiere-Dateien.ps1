@@ -6,7 +6,7 @@
     Verwendet zuerst das Windows-Feld "Aufnahmedatum", danach das
     Änderungsdatum. Fehlen beide, zählt das älteste der weiteren unten
     aufgeführten Datei- und Metadaten. Alle Unterordner werden durchsucht.
-    Die Dateiauswahl erfolgt anhand der Endungen in $endungen.
+    Die Dateiauswahl erfolgt anhand der Endung. Audiodateien bleiben am Platz.
     Jeder Jahresordner enthält die zweistelligen Monatsordner für seine Dateien.
     Bei Namenskonflikten wird eine Nummer vor der Dateiendung ergänzt.
 .EXAMPLE
@@ -91,6 +91,14 @@ $endungen = [ordered]@{
     )
     Andere = @()
 }
+$audioEndungen = [Collections.Generic.HashSet[string]]::new([string[]]@(
+    '.mp3', '.mp2', '.mp1', '.mpa', '.aac', '.adts', '.m4a', '.m4b', '.m4p',
+    '.wav', '.wave', '.bwf', '.w64', '.flac', '.alac', '.aif', '.aiff', '.aifc',
+    '.ogg', '.oga', '.opus', '.spx', '.weba', '.mka', '.wma', '.au', '.snd',
+    '.ac3', '.eac3', '.dts', '.dtshd', '.amr', '.awb', '.caf', '.aax', '.aa',
+    '.ape', '.wv', '.mpc', '.tta', '.tak', '.dsf', '.dff', '.mid', '.midi',
+    '.kar', '.ra', '.voc', '.mod', '.xm', '.s3m', '.it'
+), [StringComparer]::OrdinalIgnoreCase)
 $kategorie = @{}
 foreach ($typ in $endungen.Keys) {
     foreach ($endung in $endungen[$typ]) { $kategorie[$endung] = $typ }
@@ -108,7 +116,7 @@ function Assert-Zielordner([string]$pfad) {
 
 $dateien = @(Get-Quelldateien -ordner $ordner -ErrorAction Continue 2>&1 | ForEach-Object {
     if ($_ -is [Management.Automation.ErrorRecord]) { Write-Warning $_.ToString() }
-    else { $_ }
+    elseif (-not $audioEndungen.Contains($_.Extension)) { $_ }
 } | Sort-Object DirectoryName, Name)
 foreach ($typ in $endungen.Keys) {
     $typordner = Join-Path $ordner.FullName $typ

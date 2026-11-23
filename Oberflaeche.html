@@ -311,7 +311,7 @@
   el('cancel').onclick = () => picker.close();
   el('preview').onclick = () => run('vorschau', 'Dateien werden geprüft …');
   el('move').onclick = () => {
-    if (confirm('Alle sortierbaren Dateien in diesem Ordner und seinen Unterordnern jetzt verschieben? Unbekannte Dateitypen kommen in „Andere“.\n\n' + path.value.trim())) {
+    if (confirm('Alle sortierbaren Dateien in diesem Ordner und seinen Unterordnern jetzt verschieben? Audiodateien bleiben an ihrem Platz. Unbekannte Dateitypen kommen in „Andere“.\n\n' + path.value.trim())) {
       run('verschieben', 'Dateien werden verschoben …');
     }
   };

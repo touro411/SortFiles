@@ -45,7 +45,8 @@ Falls die Ausführung lokaler Skripte deaktiviert ist, kannst du sie für das ak
 - **Bilder** umfassen unter anderem JPG, PNG, HEIC und Kamera-Rohbilder wie NEF und CR3.
 - **Videos** umfassen unter anderem MP4, MOV, AVI und MKV.
 - **Dokumente** umfassen unter anderem PDF, Word-, Excel-, PowerPoint- und OpenDocument-Dateien sowie TXT, Markdown, CSV und RTF.
-- **Andere** nimmt Audiodateien, Dateien mit unbekannter Endung und Dateien ohne Endung auf. Die Zuordnung der bekannten Endungen steht in der Tabelle `$endungen` im [Sortierskript](./Sortiere-Dateien.ps1).
+- **Audiodateien** wie MP3, WAV, FLAC, M4A und OGG bleiben in ihrem bisherigen Ordner. Der Sortierer erkennt sie an der Dateiendung.
+- **Andere** nimmt Dateien mit unbekannter Endung und Dateien ohne Endung auf. Die vollständigen Endungslisten stehen im [Sortierskript](./Sortiere-Dateien.ps1).
 - Die Groß- und Kleinschreibung der Dateiendung spielt keine Rolle. Beide Werkzeuge überspringen beim Durchsuchen symbolische Links, Verzeichnisverbindungen und die eigenen Programm- und Anleitungsdateien am Installationsort.
 - Das Windows-Aufnahmedatum hat Vorrang. Fehlt es, zählt das Änderungsdatum. Dies ist bei Dokumenten der übliche Fall. Fehlen beide, verwendet das Skript das älteste verfügbare Datum aus den weiteren Datei- und Metadaten. Fehlt jedes verwendbare Datum, erscheint ein Hinweis und die Datei bleibt am Platz.
 - Beim Verschieben entstehen alle vier Kategorieordner. Jahres- und zweistellige Monatsordner entstehen nach Bedarf. Auch Dateien in früheren Jahres- und Monatsordnern werden einsortiert. Leere Quellordner bleiben erhalten.
