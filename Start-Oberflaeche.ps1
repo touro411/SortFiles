@@ -2,10 +2,13 @@
 [CmdletBinding()]
 param(
     [switch]$Server,
-    [ValidateRange(1,65535)][int]$Port,
+    [ValidateRange(0,65535)][int]$Port,
     [guid]$Sitzung,
     [guid]$Startkennung,
-    [string]$Netzlaufwerke
+    [string]$Netzlaufwerke,
+    [switch]$Duplikatstart,
+    [string]$InitialPath,
+    [switch]$NoBrowser
 )
 
 $ErrorActionPreference = 'Stop'
@@ -25,15 +28,19 @@ function Find-Chrome {
             if ([IO.File]::Exists($pfad)) { return $pfad }
         }
     }
+    $befehl = Get-Command chrome.exe -CommandType Application -ErrorAction SilentlyContinue
+    if ($befehl) { return $befehl.Source }
     throw 'Google Chrome wurde nicht gefunden. Bitte installiere Google Chrome und öffne Start.cmd erneut.'
 }
 
 if (-not $Server) {
-    $probe = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
-    try {
-        $probe.Start()
-        $Port = $probe.LocalEndpoint.Port
-    } finally { $probe.Stop() }
+    if (-not $Port) {
+        $probe = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+        try {
+            $probe.Start()
+            $Port = $probe.LocalEndpoint.Port
+        } finally { $probe.Stop() }
+    }
     $Sitzung = [guid]::NewGuid()
     $Startkennung = [guid]::NewGuid()
     $ursprung = "http://127.0.0.1:$Port"
@@ -45,6 +52,8 @@ if (-not $Server) {
         }
     }
     $Netzlaufwerke = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((ConvertTo-Json $zuordnungen -Compress)))
+}
+if (-not $Server -and -not $Duplikatstart) {
     $argumente = "-NoProfile -STA -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Server -Port $Port -Sitzung $Sitzung -Startkennung $Startkennung"
     $argumente += " -Netzlaufwerke $Netzlaufwerke"
     $dienst = Start-Process -FilePath "$PSHOME\powershell.exe" -Verb RunAs -WindowStyle Hidden -ArgumentList $argumente -PassThru
@@ -76,6 +85,7 @@ if (-not $Server) {
 if (-not $Port -or -not $Sitzung -or -not $Startkennung) { throw 'Startparameter fehlen.' }
 $ursprung = "http://127.0.0.1:$Port"
 $sortierer = Join-Path $PSScriptRoot 'Sortiere-Dateien.ps1'
+Import-Module (Join-Path $PSScriptRoot 'Dateipruefung.psm1')
 $seite = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Oberflaeche.html'))
 
 $freigaben = @{}
@@ -146,6 +156,11 @@ $listener = [Net.HttpListener]::new()
 $listener.Prefixes.Add("$ursprung/")
 try {
     $listener.Start()
+    if ($Duplikatstart) {
+        $adresse = "$ursprung/#$Sitzung&ansicht=duplikate&pfad=$([uri]::EscapeDataString($InitialPath))"
+        if ($NoBrowser) { Write-Host "Duplikatsuche: $adresse" }
+        else { Start-Process -FilePath (Find-Chrome) -ArgumentList "--new-window `"$adresse`"" }
+    }
     $aktiv = $true
     while ($aktiv) {
         $eingang = $listener.BeginGetContext($null, $null)
@@ -176,19 +191,35 @@ try {
                 $inhalt = '{"fehler":"Öffne die Oberfläche über Start.cmd."}'
             } else {
                 switch ($route) {
-                    { $_ -in '/ordner', '/vorschau', '/verschieben' } {
+                    { $_ -in '/ordner', '/vorschau', '/verschieben', '/duplikate/suchen', '/duplikate/loeschen' } {
                         if ($anfrage.ContentLength64 -lt 0 -or $anfrage.ContentLength64 -gt 131072) {
                             throw 'Ungültige Pfadangabe.'
                         }
                         $leser = [IO.StreamReader]::new($anfrage.InputStream, [Text.Encoding]::UTF8)
-                        try { $pfad = $leser.ReadToEnd() } finally { $leser.Dispose() }
-                        if ($route -eq '/ordner') { $daten = Get-Ordnerauswahl $pfad }
-                        else { $daten = Invoke-Sortierung $pfad ($route -eq '/vorschau') }
+                        try { $text = $leser.ReadToEnd() } finally { $leser.Dispose() }
+                        switch ($route) {
+                            '/ordner' { $daten = Get-Ordnerauswahl $text }
+                            '/vorschau' { $daten = Invoke-Sortierung $text $true }
+                            '/verschieben' {
+                                Clear-DuplicateScan
+                                $daten = Invoke-Sortierung $text $false
+                            }
+                            '/duplikate/suchen' {
+                                Clear-DuplicateScan
+                                $quelle = Resolve-Quellordner $text
+                                $daten = Invoke-DuplicateScan -Path $quelle.FullName
+                            }
+                            '/duplikate/loeschen' {
+                                $auftrag = ConvertFrom-Json $text
+                                $bestaetigt = $auftrag.confirmed -is [bool] -and $auftrag.confirmed
+                                $daten = Invoke-ConfirmedDeletion -ScanId $auftrag.scanId -Confirmed $bestaetigt
+                            }
+                        }
                     }
                     '/beenden' { $daten = @{}; $aktiv = $false }
                     default { $daten = @{}; $antwort.StatusCode = 404 }
                 }
-                $inhalt = ConvertTo-Json -InputObject $daten -Depth 4 -Compress
+                $inhalt = ConvertTo-Json -InputObject $daten -Depth 6 -Compress
             }
         } catch {
             $antwort.StatusCode = 400

@@ -22,6 +22,14 @@ Voraussetzungen sind Windows, Windows PowerShell 5.1 und Google Chrome. Belasse 
 
 Beim Start übernimmt das Programm die verbundenen Netzlaufwerke der aufrufenden Windows-Sitzung. Bei der Auswahl eines solchen Laufwerks zeigt das Pfadfeld anschließend die zugehörige UNC-Adresse. Für Netzwerkordner braucht das bei der UAC-Abfrage verwendete Konto Lesezugriff und zum Verschieben auch Schreib- und Löschrechte auf der Freigabe.
 
+## Duplikate suchen und löschen
+
+Wähle oben neben **Dateisortierer** die **Duplikatsuche**. Beide Werkzeuge verwenden denselben Quellordner und dieselbe Ordnerauswahl. Mit **Duplikate suchen** prüfst du den Ordner samt Unterordnern. Das Werkzeug vergleicht zunächst die Dateigröße und anschließend bei gleich großen Dateien den SHA-256-Hash des Inhalts.
+
+Die Ergebnisliste zeigt für jede Gruppe den alphabetisch ersten Pfad als **Behalten** und alle weiteren Kopien als **Löschen**. Mit **Angezeigte Kopien löschen …** und deiner Bestätigung entfernst du diese Kopien endgültig. Vor dem Löschen prüft das Werkzeug die Inhalte erneut. Hat sich die zu behaltende Datei geändert oder fehlt sie, wird die gesamte Gruppe übersprungen. Das Ergebnis nennt gelöschte und übersprungene Dateien sowie Fehler.
+
+Du kannst auch direkt mit `.\delete_duplicates.ps1` in die Duplikatsuche einsteigen. Mit `-InitialPath 'D:\Sammlung'` belegst du den Quellordner vor.
+
 ## Direkt mit PowerShell sortieren
 
 Öffne Windows PowerShell im Skriptordner. Ersetze den Beispielpfad durch deinen Quellordner. Der erste Aufruf zeigt die Vorschau, der zweite verschiebt die Dateien.
@@ -40,7 +48,7 @@ Falls die Ausführung lokaler Skripte deaktiviert ist, kannst du sie für das ak
 - **Dokumente** umfassen unter anderem PDF, Word-, Excel-, PowerPoint- und OpenDocument-Dateien sowie TXT, Markdown, CSV und RTF.
 - **Audio** umfasst unter anderem MP3, WAV, FLAC, AAC, M4A, OGG, Opus und Hörbücher im M4B-Format.
 - **Andere** nimmt Dateien mit unbekannter Endung und Dateien ohne Endung auf. Die Zuordnung der bekannten Endungen steht in der Tabelle `$endungen` im [Sortierskript](./Sortiere-Dateien.ps1).
-- Die Groß- und Kleinschreibung der Dateiendung spielt keine Rolle. Symbolische Links, Verzeichnisverbindungen und die eigenen fünf Programm- und Anleitungsdateien am Installationsort werden beim Durchsuchen übersprungen.
+- Die Groß- und Kleinschreibung der Dateiendung spielt keine Rolle. Beide Werkzeuge überspringen beim Durchsuchen symbolische Links, Verzeichnisverbindungen und die eigenen Programm- und Anleitungsdateien am Installationsort.
 - Das Windows-Aufnahmedatum hat Vorrang. Fehlt es, zählt das Änderungsdatum. Dies ist bei Dokumenten der übliche Fall. Fehlen beide, verwendet das Skript das älteste verfügbare Datum aus den weiteren Datei- und Metadaten. Fehlt jedes verwendbare Datum, erscheint ein Hinweis und die Datei bleibt am Platz.
 - Beim Verschieben entstehen alle fünf Kategorieordner. Jahres- und zweistellige Monatsordner entstehen nach Bedarf. Auch Dateien in früheren Jahres- und Monatsordnern werden einsortiert. Leere Quellordner bleiben erhalten.
 - Ist der Zielname belegt, erhält die hinzukommende Datei einen Zusatz wie `Rechnung (1).pdf`. Bei einem erneuten Lauf zählt das Skript bereits richtig einsortierte Dateien und lässt sie am Platz.

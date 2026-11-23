@@ -101,26 +101,7 @@ foreach ($typ in $endungen.Keys) {
     foreach ($endung in $endungen[$typ]) { $kategorie[$endung] = $typ }
 }
 
-# Auch bei Auswahl des Programmordners muss ein weiterer Start möglich bleiben.
-$programmdateien = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-foreach ($name in 'Start.cmd','Start-Oberflaeche.ps1','Oberflaeche.html','Sortiere-Dateien.ps1','README.md') {
-    [void]$programmdateien.Add((Join-Path $PSScriptRoot $name))
-}
-
-function Get-Quelldateien {
-    $offen = [Collections.Generic.Stack[IO.DirectoryInfo]]::new()
-    $offen.Push($ordner)
-    while ($offen.Count) {
-        $aktuell = $offen.Pop()
-        try {
-            foreach ($element in $aktuell.EnumerateFileSystemInfos()) {
-                if (($element.Attributes -band [IO.FileAttributes]::ReparsePoint) -and $element.LinkType) { continue }
-                if ($element -is [IO.DirectoryInfo]) { $offen.Push($element) }
-                elseif (-not $programmdateien.Contains($element.FullName)) { $element }
-            }
-        } catch { Write-Warning "Ordner nicht vollständig lesbar '$($aktuell.FullName)': $_" }
-    }
-}
+Import-Module (Join-Path $PSScriptRoot 'Dateipruefung.psm1')
 
 function Assert-Zielordner([string]$pfad) {
     $vorhanden = [IO.DirectoryInfo]::new($pfad)
@@ -130,7 +111,10 @@ function Assert-Zielordner([string]$pfad) {
     }
 }
 
-$dateien = @(Get-Quelldateien | Sort-Object DirectoryName, Name)
+$dateien = @(Get-Quelldateien -ordner $ordner -ErrorAction Continue 2>&1 | ForEach-Object {
+    if ($_ -is [Management.Automation.ErrorRecord]) { Write-Warning $_.ToString() }
+    else { $_ }
+} | Sort-Object DirectoryName, Name)
 foreach ($typ in $endungen.Keys) {
     $typordner = Join-Path $ordner.FullName $typ
     Assert-Zielordner $typordner

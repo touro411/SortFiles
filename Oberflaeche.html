@@ -9,7 +9,15 @@
   body { margin: 0 }
   main { width: min(62rem, 100% - 2rem); margin: 0 auto 4rem }
   header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; border-bottom: 1px solid #cbd4df }
-  header strong { display: flex; align-items: center; gap: .8rem }
+  header, header nav { flex-wrap: wrap; gap: .4rem }
+  header nav { display: flex; align-items: center }
+  header nav button { display: inline-flex; align-items: center; gap: .6rem; background: transparent; border-color: transparent }
+  header nav button[aria-pressed="true"] { color: #194a92; background: #e4ecf8 }
+  [hidden] { display: none !important }
+  .danger { color: #922d29; border-color: #b46b64 }
+  #duplicateList li { margin: .45rem 0 }
+  #duplicateList details { padding: .6rem 0; border-top: 1px solid #dbe2ea }
+  #duplicateList summary { cursor: pointer; overflow-wrap: anywhere }
   .folder { display: inline-block; position: relative; width: 1.5rem; height: 1rem; margin-top: .25rem; border-radius: 2px 3px 3px 3px; background: var(--ink, #2866bb) }
   .folder::before { content: ""; position: absolute; left: 0; top: -.23rem; width: 48%; height: .3rem; border-radius: 2px 3px 0 0; background: inherit }
   h1 { margin: 3.2rem 0 .4rem; font-size: clamp(2.1rem,5vw,3.4rem); letter-spacing: -.055em; line-height: 1.12 }
@@ -50,13 +58,14 @@
   @media (max-width: 38rem) { .tree { grid-template-columns: 1fr } h1 { margin-top: 2rem } }
 </style>
 <main>
-  <header><strong><span class="folder" aria-hidden="true"></span>Dateisortierer</strong><button class="exit" id="exit">Sitzung beenden</button></header>
-  <h1>Dateien sortieren</h1>
-  <p class="intro">Verschiebe die Dateien eines Ordners samt Unterordnern nach Kategorie, Jahr und Monat.</p>
-  <section class="panel" aria-label="Sortierung">
+  <header><nav aria-label="Werkzeuge"><button id="sortTool" aria-pressed="true"><span class="folder" aria-hidden="true"></span>Dateisortierer</button><button id="duplicateTool" aria-pressed="false">Duplikatsuche</button></nav><button class="exit" id="exit">Sitzung beenden</button></header>
+  <h1 id="title">Dateien sortieren</h1>
+  <p class="intro" id="intro">Verschiebe die Dateien eines Ordners samt Unterordnern nach Kategorie, Jahr und Monat.</p>
+  <section class="panel" aria-label="Quellordner und Aktionen">
     <label for="path">Quellordner</label>
     <div class="field"><input id="path" placeholder="D:\Sammlung oder \\Server\Freigabe" spellcheck="false" autocomplete="off"><button id="browse">Ordner auswählen …</button></div>
-    <div class="actions"><button id="preview" disabled>Vorschau anzeigen</button><button class="primary" id="move" disabled>Dateien verschieben</button></div>
+    <div class="actions" id="sortActions"><button id="preview" disabled>Vorschau anzeigen</button><button class="primary" id="move" disabled>Dateien verschieben</button></div>
+    <div class="actions" id="duplicateActions" hidden><button class="primary" id="scan" disabled>Duplikate suchen</button></div>
     <p id="status" role="status" aria-live="polite"></p>
   </section>
   <section class="panel" id="result" hidden>
@@ -65,7 +74,12 @@
     <p id="limit" hidden></p>
     <details id="warnings" hidden><summary></summary><ul></ul></details>
   </section>
-  <section class="panel">
+  <section class="panel" id="duplicateResult" hidden>
+    <h2 id="duplicateTitle">Gefundene Duplikate</h2><p id="duplicateSummary"></p>
+    <div id="duplicateList"></div>
+    <div class="actions" id="deleteActions" hidden><button class="danger" id="deleteCopies">Angezeigte Kopien löschen …</button></div>
+  </section>
+  <section class="panel" id="structure">
     <h2>Zielstruktur im Quellordner</h2>
     <div class="tree">
       <div class="branch"><strong><span class="folder" aria-hidden="true"></span>Bilder</strong><span class="sub">JJJJ \ MM</span></div>
@@ -91,17 +105,38 @@
   'use strict';
   const el = id => document.getElementById(id);
   const path = el('path');
-  const token = location.hash.slice(1) || sessionStorage.getItem('sitzung');
+  const [startToken, ...options] = location.hash.slice(1).split('&');
+  const start = new URLSearchParams(options.join('&'));
+  const token = startToken || sessionStorage.getItem('sitzung');
   if (location.hash) {
     sessionStorage.setItem('sitzung', token);
     history.replaceState(null, '', '/');
   }
   let busy = false;
   let ended = false;
+  let scan = null;
+  const sortIntro = el('intro').textContent;
+  function resetResults() {
+    scan = null;
+    el('result').hidden = el('duplicateResult').hidden = el('deleteActions').hidden = true;
+    el('duplicateList').replaceChildren();
+    status('');
+    controls();
+  }
+  function selectTool(duplicates) {
+    el('sortTool').setAttribute('aria-pressed', String(!duplicates));
+    el('duplicateTool').setAttribute('aria-pressed', String(duplicates));
+    el('title').textContent = duplicates ? 'Duplikate finden' : 'Dateien sortieren';
+    el('intro').textContent = duplicates ? 'Vergleiche Dateien im Quellordner und seinen Unterordnern. Bei identischem Inhalt bleibt der alphabetisch erste Pfad erhalten.' : sortIntro;
+    el('sortActions').hidden = el('structure').hidden = duplicates;
+    el('duplicateActions').hidden = !duplicates;
+    resetResults();
+  }
   function controls() {
     const locked = busy || ended || !token;
-    path.disabled = el('browse').disabled = el('exit').disabled = locked;
-    el('preview').disabled = el('move').disabled = locked || !path.value.trim();
+    path.disabled = el('browse').disabled = el('exit').disabled = el('sortTool').disabled = el('duplicateTool').disabled = locked;
+    el('scan').disabled = el('preview').disabled = el('move').disabled = locked || !path.value.trim();
+    el('deleteCopies').disabled = locked || !scan?.DeleteCount;
   }
   function status(message, error = false) {
     el('status').classList.toggle('error', error);
@@ -140,24 +175,67 @@
     }));
     el('result').hidden = false;
   }
-  async function run(route, message) {
+  function renderDuplicates(data) {
+    const afterDelete = 'DeletedCount' in data;
+    scan = afterDelete ? null : data;
+    const list = el('duplicateList');
+    list.replaceChildren();
+    el('duplicateTitle').textContent = afterDelete ? 'Löschergebnis' : 'Suchergebnis';
+    if (afterDelete) {
+      el('duplicateSummary').textContent = data.DeletedCount + ' gelöscht · ' + data.SkippedCount + ' übersprungen · ' + data.ErrorCount + ' Fehler';
+      const issues = document.createElement('ul');
+      for (const item of data.Results.filter(i => i.Status !== 'deleted')) {
+        const row = document.createElement('li');
+        row.textContent = item.Path + ' — ' + item.Message;
+        issues.append(row);
+      }
+      if (issues.childElementCount) list.append(issues);
+    } else {
+      const errors = data.ReadErrorCount + data.HashErrorCount;
+      el('duplicateSummary').textContent = data.ScannedFiles + ' Dateien durchsucht · ' +
+        (data.DeleteCount ? data.DeleteCount + ' Kopien zum Löschen · ' + data.TotalBytes.toLocaleString('de-DE') + ' Byte' : 'Keine Duplikate gefunden.') +
+        (errors ? ' · Lesefehler: ' + errors : '');
+      for (const group of data.Groups) {
+        const details = document.createElement('details');
+        details.open = data.GroupCount <= 10;
+        const label = document.createElement('summary');
+        label.textContent = group.Keep.Name + ' (' + (1 + group.Delete.length) + ' Dateien)';
+        const paths = document.createElement('ul');
+        for (const [action, file] of [['Behalten', group.Keep], ...group.Delete.map(file => ['Löschen', file])]) {
+          const row = document.createElement('li');
+          const prefix = document.createElement('strong');
+          prefix.textContent = action + ' · ';
+          row.append(prefix, file.Path);
+          paths.append(row);
+        }
+        details.append(label, paths);
+        list.append(details);
+      }
+    }
+    el('deleteActions').hidden = !scan?.DeleteCount;
+    el('duplicateResult').hidden = false;
+  }
+  async function run(route, message, body = path.value.trim()) {
     busy = true;
     controls();
     status(message);
     try {
-      const data = await request(route, path.value.trim());
+      const data = await request(route, body);
       if (route === 'beenden') {
         ended = true;
         sessionStorage.removeItem('sitzung');
         status('Sitzung beendet. Du kannst dieses Fenster schließen.');
+      } else if (route.startsWith('duplikate/')) {
+        renderDuplicates(data);
+        status(route === 'duplikate/suchen' ? 'Suche abgeschlossen.' : 'Löschvorgang abgeschlossen.');
       } else {
         render(data, route === 'vorschau');
         status(route === 'vorschau' ? 'Vorschau abgeschlossen.' : 'Sortierung abgeschlossen.');
       }
-    } catch (e) { el('result').hidden = true; status(e.message, true); }
+    } catch (e) { resetResults(); status(e.message, true); }
     finally { busy = false; controls(); }
   }
-  path.oninput = () => { el('result').hidden = true; status(''); controls(); };
+  path.oninput = resetResults;
   const picker = el('picker');
   const address = el('address');
   let current = null;
@@ -204,9 +282,7 @@
   };
   el('choose').onclick = () => {
     path.value = current.pfad;
-    el('result').hidden = true;
-    status('');
-    controls();
+    resetResults();
     picker.close();
   };
   el('cancel').onclick = () => picker.close();
@@ -217,6 +293,16 @@
     }
   };
   el('exit').onclick = () => run('beenden', 'Sitzung wird beendet …');
+  el('sortTool').onclick = () => selectTool(false);
+  el('duplicateTool').onclick = () => selectTool(true);
+  el('scan').onclick = () => { resetResults(); run('duplikate/suchen', 'Dateigrößen und Inhalte werden verglichen …'); };
+  el('deleteCopies').onclick = () => {
+    if (scan && confirm(scan.DeleteCount + ' Kopien in diesem Ordner endgültig löschen?\n\n' + scan.RootPath + '\n\nDie als „Behalten“ markierten Dateien bleiben erhalten.')) {
+      run('duplikate/loeschen', 'Kopien werden erneut geprüft und gelöscht …', JSON.stringify({scanId: scan.ScanId, confirmed: true}));
+    }
+  };
+  if (start.has('pfad')) path.value = start.get('pfad');
+  selectTool(start.get('ansicht') === 'duplikate');
   if (!token) status('Starte den Dateisortierer über Start.cmd.', true);
   controls();
 </script>
