@@ -1,7 +1,7 @@
 ﻿#requires -Version 5.1
 <#
 .SYNOPSIS
-    Verschiebt Dateien nach Kategorie, Jahr und Monat, z. B. in Audio\2025\07.
+    Verschiebt Dateien nach Kategorie, Jahr und Monat, z. B. in Bilder\2025\07.
 .DESCRIPTION
     Verwendet zuerst das Windows-Feld "Aufnahmedatum", danach das
     Änderungsdatum. Fehlen beide, zählt das älteste der weiteren unten
@@ -88,11 +88,6 @@ $endungen = [ordered]@{
         '.xls', '.xlsx', '.xlsm', '.xlsb', '.xlt', '.xltx', '.xltm', '.csv', '.tsv',
         '.ppt', '.pptx', '.pptm', '.pps', '.ppsx', '.ppsm', '.pot', '.potx', '.potm',
         '.odt', '.ods', '.odp', '.odg', '.ott', '.ots', '.otp', '.epub', '.xps', '.oxps'
-    )
-    Audio = @(
-        '.mp3', '.wav', '.wave', '.flac', '.aac', '.m4a', '.m4b', '.alac', '.aif',
-        '.aiff', '.aifc', '.ogg', '.oga', '.opus', '.wma', '.amr', '.awb', '.au',
-        '.snd', '.ape', '.wv', '.mid', '.midi', '.ac3', '.eac3', '.dts', '.mka', '.caf'
     )
     Andere = @()
 }

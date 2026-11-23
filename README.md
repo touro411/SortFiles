@@ -7,7 +7,6 @@ Quellordner\
 ├── Bilder\2025\07\Urlaub.jpg
 ├── Videos\2025\07\Ausflug.mp4
 ├── Dokumente\2025\07\Rechnung.pdf
-├── Audio\2025\07\Konzert.flac
 └── Andere\2025\07\Archiv.zip
 ```
 
@@ -46,9 +45,8 @@ Falls die Ausführung lokaler Skripte deaktiviert ist, kannst du sie für das ak
 - **Bilder** umfassen unter anderem JPG, PNG, HEIC und Kamera-Rohbilder wie NEF und CR3.
 - **Videos** umfassen unter anderem MP4, MOV, AVI und MKV.
 - **Dokumente** umfassen unter anderem PDF, Word-, Excel-, PowerPoint- und OpenDocument-Dateien sowie TXT, Markdown, CSV und RTF.
-- **Audio** umfasst unter anderem MP3, WAV, FLAC, AAC, M4A, OGG, Opus und Hörbücher im M4B-Format.
-- **Andere** nimmt Dateien mit unbekannter Endung und Dateien ohne Endung auf. Die Zuordnung der bekannten Endungen steht in der Tabelle `$endungen` im [Sortierskript](./Sortiere-Dateien.ps1).
+- **Andere** nimmt Audiodateien, Dateien mit unbekannter Endung und Dateien ohne Endung auf. Die Zuordnung der bekannten Endungen steht in der Tabelle `$endungen` im [Sortierskript](./Sortiere-Dateien.ps1).
 - Die Groß- und Kleinschreibung der Dateiendung spielt keine Rolle. Beide Werkzeuge überspringen beim Durchsuchen symbolische Links, Verzeichnisverbindungen und die eigenen Programm- und Anleitungsdateien am Installationsort.
 - Das Windows-Aufnahmedatum hat Vorrang. Fehlt es, zählt das Änderungsdatum. Dies ist bei Dokumenten der übliche Fall. Fehlen beide, verwendet das Skript das älteste verfügbare Datum aus den weiteren Datei- und Metadaten. Fehlt jedes verwendbare Datum, erscheint ein Hinweis und die Datei bleibt am Platz.
-- Beim Verschieben entstehen alle fünf Kategorieordner. Jahres- und zweistellige Monatsordner entstehen nach Bedarf. Auch Dateien in früheren Jahres- und Monatsordnern werden einsortiert. Leere Quellordner bleiben erhalten.
+- Beim Verschieben entstehen alle vier Kategorieordner. Jahres- und zweistellige Monatsordner entstehen nach Bedarf. Auch Dateien in früheren Jahres- und Monatsordnern werden einsortiert. Leere Quellordner bleiben erhalten.
 - Ist der Zielname belegt, erhält die hinzukommende Datei einen Zusatz wie `Rechnung (1).pdf`. Bei einem erneuten Lauf zählt das Skript bereits richtig einsortierte Dateien und lässt sie am Platz.
