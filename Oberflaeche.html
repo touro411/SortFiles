@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dateisortierer</title>
+<style>
+  :root { color-scheme: light; font-family: Inter, "Segoe UI", sans-serif; color: #18273a; background: #f4f6fa }
+  * { box-sizing: border-box }
+  body { margin: 0 }
+  main { width: min(62rem, 100% - 2rem); margin: 0 auto 4rem }
+  header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; border-bottom: 1px solid #cbd4df }
+  header strong { display: flex; align-items: center; gap: .8rem }
+  .folder { display: inline-block; position: relative; width: 1.5rem; height: 1rem; margin-top: .25rem; border-radius: 2px 3px 3px 3px; background: var(--ink, #2866bb) }
+  .folder::before { content: ""; position: absolute; left: 0; top: -.23rem; width: 48%; height: .3rem; border-radius: 2px 3px 0 0; background: inherit }
+  h1 { margin: 3.2rem 0 .4rem; font-size: clamp(2.1rem,5vw,3.4rem); letter-spacing: -.055em; line-height: 1.12 }
+  h2 { margin: 0 0 1.2rem; font-size: 1.25rem; letter-spacing: -.025em }
+  p { line-height: 1.5 }
+  .intro { margin: 0 0 2rem; color: #465a71 }
+  .panel { background: #fff; border: 1px solid #d0d9e4; border-radius: .85rem; padding: clamp(1.2rem,3vw,2rem); margin-bottom: 1rem }
+  label { display: block; font-weight: 650; margin-bottom: .55rem }
+  .field, .actions { display: flex; gap: .65rem; flex-wrap: wrap }
+  input, button { font: inherit; border-radius: .45rem; min-height: 2.75rem }
+  input { flex: 1 1 16rem; min-width: 0; border: 1px solid #93a4b8; padding: .6rem .85rem }
+  button { font-weight: 600; padding: .55rem 1rem; cursor: pointer; color: #233953; border: 1px solid #afbdcd; background: #fff }
+  button:hover:enabled { background: #eef3f9 }
+  button.primary { background: #245bad; color: white; border-color: #245bad }
+  button.primary:hover:enabled { background: #194a92 }
+  button:disabled { opacity: .55; cursor: default }
+  :focus-visible { outline: 3px solid #377fe1; outline-offset: 3px }
+  .actions { margin-top: 1.4rem }
+  .exit { border: 0; background: transparent; font-size: .92rem }
+  .tree { display: grid; grid-template-columns: repeat(auto-fit,minmax(9rem,1fr)); gap: .75rem }
+  .branch { background: #f4f7fb; border-radius: .45rem; padding: 1rem }
+  .branch strong { display: flex; align-items: center; gap: .65rem }
+  .sub { display: block; margin: .7rem 0 0 .55rem; border-left: 1px solid #a1b0c1; padding-left: 1.2rem; font: .92rem/1.4 Consolas, monospace; color: #435870 }
+  #status { color: #284861; font-weight: 600 }
+  #status:empty { display: none }
+  #status.error { color: #9b2f25 }
+  .results { overflow-x: auto }
+  table { border-collapse: collapse; width: 100%; font-size: .94rem; text-align: left; table-layout: fixed }
+  th, td { padding: .7rem; border-bottom: 1px solid #dbe2ea; overflow-wrap: anywhere; vertical-align: top }
+  th { background: #f4f7fb }
+  li { overflow-wrap: anywhere; margin: .4rem 0 }
+  dialog { width: min(36rem, 95vw); max-height: 90vh; padding: 1.5rem; border: 1px solid #afbdcd; border-radius: .85rem; color: inherit }
+  dialog::backdrop { background: rgb(15 30 50 / 50%) }
+  .locations { display: grid; align-content: start; gap: .25rem; max-height: 32vh; overflow: auto }
+  .locations button { text-align: left; font-weight: 500; overflow-wrap: anywhere }
+  #pickerStatus { margin: .75rem 0 }
+  #pickerStatus.error { color: #9b2f25 }
+  @media (max-width: 38rem) { .tree { grid-template-columns: 1fr } h1 { margin-top: 2rem } }
+</style>
+<main>
+  <header><strong><span class="folder" aria-hidden="true"></span>Dateisortierer</strong><button class="exit" id="exit">Sitzung beenden</button></header>
+  <h1>Dateien sortieren</h1>
+  <p class="intro">Verschiebe die Dateien eines Ordners samt Unterordnern nach Kategorie, Jahr und Monat.</p>
+  <section class="panel" aria-label="Sortierung">
+    <label for="path">Quellordner</label>
+    <div class="field"><input id="path" placeholder="D:\Sammlung oder \\Server\Freigabe" spellcheck="false" autocomplete="off"><button id="browse">Ordner auswählen …</button></div>
+    <div class="actions"><button id="preview" disabled>Vorschau anzeigen</button><button class="primary" id="move" disabled>Dateien verschieben</button></div>
+    <p id="status" role="status" aria-live="polite"></p>
+  </section>
+  <section class="panel" id="result" hidden>
+    <h2 id="resultTitle"></h2><p id="summary"></p>
+    <div class="results" id="files" hidden><table><thead><tr><th scope="col">Quelldatei</th><th scope="col">Zielpfad</th></tr></thead><tbody></tbody></table></div>
+    <p id="limit" hidden></p>
+    <details id="warnings" hidden><summary></summary><ul></ul></details>
+  </section>
+  <section class="panel">
+    <h2>Zielstruktur im Quellordner</h2>
+    <div class="tree">
+      <div class="branch"><strong><span class="folder" aria-hidden="true"></span>Bilder</strong><span class="sub">JJJJ \ MM</span></div>
+      <div class="branch"><strong><span class="folder" style="--ink:#7957a2" aria-hidden="true"></span>Videos</strong><span class="sub">JJJJ \ MM</span></div>
+      <div class="branch"><strong><span class="folder" style="--ink:#257969" aria-hidden="true"></span>Dokumente</strong><span class="sub">JJJJ \ MM</span></div>
+      <div class="branch"><strong><span class="folder" style="--ink:#b36618" aria-hidden="true"></span>Audio</strong><span class="sub">JJJJ \ MM</span></div>
+      <div class="branch"><strong><span class="folder" style="--ink:#657286" aria-hidden="true"></span>Andere</strong><span class="sub">JJJJ \ MM</span></div>
+    </div>
+  </section>
+</main>
+<dialog id="picker" aria-labelledby="pickerTitle">
+  <h2 id="pickerTitle">Quellordner auswählen</h2>
+  <form id="addressForm">
+    <label for="address">Ordnerpfad</label>
+    <div class="field"><input id="address" placeholder="Laufwerk oder UNC-Pfad einfügen" spellcheck="false" autocomplete="off"><button>Öffnen</button></div>
+  </form>
+  <div class="actions"><button id="drives">Laufwerke</button><button id="up">Übergeordneter Ordner</button></div>
+  <p id="pickerStatus" role="status"></p>
+  <div class="locations" id="folders"></div>
+  <div class="actions"><button class="primary" id="choose" disabled>Diesen Ordner übernehmen</button><button id="cancel">Abbrechen</button></div>
+</dialog>
+<script>
+  'use strict';
+  const el = id => document.getElementById(id);
+  const path = el('path');
+  const token = location.hash.slice(1) || sessionStorage.getItem('sitzung');
+  if (location.hash) {
+    sessionStorage.setItem('sitzung', token);
+    history.replaceState(null, '', '/');
+  }
+  let busy = false;
+  let ended = false;
+  function controls() {
+    const locked = busy || ended || !token;
+    path.disabled = el('browse').disabled = el('exit').disabled = locked;
+    el('preview').disabled = el('move').disabled = locked || !path.value.trim();
+  }
+  function status(message, error = false) {
+    el('status').classList.toggle('error', error);
+    el('status').textContent = message;
+  }
+  async function request(route, body) {
+    let response;
+    try { response = await fetch('/' + route, {method: 'POST', headers: {'X-Sitzung': token}, body}); }
+    catch { throw new Error('Verbindung unterbrochen. Öffne Start.cmd erneut und prüfe den Stand mit der Vorschau.'); }
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.fehler || 'Anfrage fehlgeschlagen.');
+    return data;
+  }
+  function render(data, preview) {
+    const count = preview ? data.Geplant : data.Verschoben;
+    el('resultTitle').textContent = preview ? 'Vorschau' : 'Ergebnis';
+    el('summary').textContent = count + (preview ? ' zum Verschieben' : ' verschoben') + ' · ' + data.Einsortiert + ' bereits einsortiert · ' + data.Warnungen + ' Hinweise';
+    const rows = document.querySelector('tbody');
+    rows.replaceChildren();
+    for (const item of data.Dateien) {
+      const row = rows.insertRow();
+      row.insertCell().textContent = item.Von;
+      row.insertCell().textContent = item.Nach;
+    }
+    el('files').hidden = !data.Dateien.length;
+    el('limit').hidden = count <= data.Dateien.length;
+    el('limit').textContent = 'Angezeigt werden die ersten ' + data.Dateien.length + ' Dateien.';
+    const warnings = el('warnings');
+    warnings.hidden = !data.Warnungen;
+    warnings.open = Boolean(data.Warnungen);
+    warnings.querySelector('summary').textContent = 'Hinweise (' + data.Hinweise.length + ' von ' + data.Warnungen + ')';
+    warnings.querySelector('ul').replaceChildren(...data.Hinweise.map(message => {
+      const li = document.createElement('li');
+      li.textContent = message;
+      return li;
+    }));
+    el('result').hidden = false;
+  }
+  async function run(route, message) {
+    busy = true;
+    controls();
+    status(message);
+    try {
+      const data = await request(route, path.value.trim());
+      if (route === 'beenden') {
+        ended = true;
+        sessionStorage.removeItem('sitzung');
+        status('Sitzung beendet. Du kannst dieses Fenster schließen.');
+      } else {
+        render(data, route === 'vorschau');
+        status(route === 'vorschau' ? 'Vorschau abgeschlossen.' : 'Sortierung abgeschlossen.');
+      }
+    } catch (e) { el('result').hidden = true; status(e.message, true); }
+    finally { busy = false; controls(); }
+  }
+  path.oninput = () => { el('result').hidden = true; status(''); controls(); };
+  const picker = el('picker');
+  const address = el('address');
+  let current = null;
+  let navigation = 0;
+  async function openFolder(folder) {
+    const sequence = ++navigation;
+    current = null;
+    address.value = folder;
+    el('choose').disabled = el('up').disabled = true;
+    el('folders').replaceChildren();
+    el('pickerStatus').classList.remove('error');
+    el('pickerStatus').textContent = 'Ordner werden geladen …';
+    try {
+      const data = await request('ordner', folder);
+      if (sequence !== navigation || !picker.open) return;
+      current = data;
+      address.value = data.pfad;
+      el('choose').disabled = el('up').disabled = !data.pfad;
+      el('pickerStatus').textContent = data.pfad ? (data.ordner.length ? 'Unterordner' : 'Keine Unterordner vorhanden.') : 'Verfügbare Laufwerke';
+      const list = document.createDocumentFragment();
+      for (const child of data.ordner) {
+        const button = document.createElement('button');
+        button.textContent = child.name;
+        button.onclick = () => openFolder(child.pfad);
+        list.append(button);
+      }
+      el('folders').append(list);
+    } catch (e) {
+      if (sequence !== navigation || !picker.open) return;
+      el('pickerStatus').classList.add('error');
+      el('pickerStatus').textContent = e.message;
+    }
+  }
+  el('browse').onclick = () => { picker.showModal(); openFolder(path.value.trim()); };
+  el('drives').onclick = () => openFolder('');
+  el('up').onclick = () => openFolder(current.eltern);
+  el('addressForm').onsubmit = event => { event.preventDefault(); openFolder(address.value.trim()); };
+  address.oninput = () => {
+    ++navigation;
+    el('choose').disabled = el('up').disabled = true;
+    el('folders').replaceChildren();
+    el('pickerStatus').classList.remove('error');
+    el('pickerStatus').textContent = 'Öffne den eingegebenen Pfad mit der Eingabetaste.';
+  };
+  el('choose').onclick = () => {
+    path.value = current.pfad;
+    el('result').hidden = true;
+    status('');
+    controls();
+    picker.close();
+  };
+  el('cancel').onclick = () => picker.close();
+  el('preview').onclick = () => run('vorschau', 'Dateien werden geprüft …');
+  el('move').onclick = () => {
+    if (confirm('Alle sortierbaren Dateien in diesem Ordner und seinen Unterordnern jetzt verschieben? Unbekannte Dateitypen kommen in „Andere“.\n\n' + path.value.trim())) {
+      run('verschieben', 'Dateien werden verschoben …');
+    }
+  };
+  el('exit').onclick = () => run('beenden', 'Sitzung wird beendet …');
+  if (!token) status('Starte den Dateisortierer über Start.cmd.', true);
+  controls();
+</script>
+</html>

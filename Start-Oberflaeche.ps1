@@ -1,0 +1,205 @@
+﻿#requires -Version 5.1
+[CmdletBinding()]
+param(
+    [switch]$Server,
+    [ValidateRange(1,65535)][int]$Port,
+    [guid]$Sitzung,
+    [guid]$Startkennung,
+    [string]$Netzlaufwerke
+)
+
+$ErrorActionPreference = 'Stop'
+
+function Find-Chrome {
+    $app = 'Software\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe'
+    foreach ($schluessel in "HKCU:\$app", "HKLM:\$app") {
+        $eintrag = Get-Item -LiteralPath $schluessel -ErrorAction SilentlyContinue
+        if ($eintrag) {
+            $pfad = ([string]$eintrag.GetValue('')).Trim('"')
+            if ([IO.File]::Exists($pfad)) { return $pfad }
+        }
+    }
+    foreach ($basis in $env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:LOCALAPPDATA) {
+        if ($basis) {
+            $pfad = Join-Path $basis 'Google\Chrome\Application\chrome.exe'
+            if ([IO.File]::Exists($pfad)) { return $pfad }
+        }
+    }
+    throw 'Google Chrome wurde nicht gefunden. Bitte installiere Google Chrome und öffne Start.cmd erneut.'
+}
+
+if (-not $Server) {
+    $probe = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+    try {
+        $probe.Start()
+        $Port = $probe.LocalEndpoint.Port
+    } finally { $probe.Stop() }
+    $Sitzung = [guid]::NewGuid()
+    $Startkennung = [guid]::NewGuid()
+    $ursprung = "http://127.0.0.1:$Port"
+    # Laufwerksbuchstaben gehören zur Anmeldesitzung des aufrufenden Benutzers.
+    $zuordnungen = @{}
+    foreach ($laufwerk in Get-PSDrive -PSProvider FileSystem) {
+        if ($laufwerk.Name -match '^[A-Z]$' -and $laufwerk.DisplayRoot -like '\\*') {
+            $zuordnungen[$laufwerk.Name] = $laufwerk.DisplayRoot
+        }
+    }
+    $Netzlaufwerke = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((ConvertTo-Json $zuordnungen -Compress)))
+    $argumente = "-NoProfile -STA -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Server -Port $Port -Sitzung $Sitzung -Startkennung $Startkennung"
+    $argumente += " -Netzlaufwerke $Netzlaufwerke"
+    $dienst = Start-Process -FilePath "$PSHOME\powershell.exe" -Verb RunAs -WindowStyle Hidden -ArgumentList $argumente -PassThru
+    $client = [Net.WebClient]::new()
+    $client.Proxy = $null
+    try {
+        $ende = [datetime]::UtcNow.AddSeconds(20)
+        while ($true) {
+            if ($dienst.HasExited) { throw 'Der lokale Dateisortierer konnte nicht starten.' }
+            try { $antwort = $client.DownloadString("$ursprung/bereit") }
+            catch [Net.WebException] { $antwort = '' }
+            if ($antwort -ceq $Startkennung.ToString()) { break }
+            if ([datetime]::UtcNow -gt $ende) { throw 'Der lokale Dateisortierer antwortet nicht.' }
+            Start-Sleep -Milliseconds 150
+        }
+        try {
+            $chrome = Find-Chrome
+            Start-Process -FilePath $chrome -ArgumentList "--new-window $ursprung/#$Sitzung"
+        } catch {
+            $client.Headers['Origin'] = $ursprung
+            $client.Headers['X-Sitzung'] = $Sitzung.ToString()
+            [void]$client.UploadString("$ursprung/beenden", '')
+            throw
+        }
+    } finally { $client.Dispose() }
+    return
+}
+
+if (-not $Port -or -not $Sitzung -or -not $Startkennung) { throw 'Startparameter fehlen.' }
+$ursprung = "http://127.0.0.1:$Port"
+$sortierer = Join-Path $PSScriptRoot 'Sortiere-Dateien.ps1'
+$seite = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'Oberflaeche.html'))
+
+$freigaben = @{}
+if ($Netzlaufwerke) {
+    $json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($Netzlaufwerke))
+    foreach ($paar in (ConvertFrom-Json $json).PSObject.Properties) {
+        $freigaben[$paar.Name] = $paar.Value
+    }
+}
+
+function Resolve-Quellordner([string]$pfad) {
+    $pfad = $pfad.Trim()
+    if ($pfad -match '^"(.*)"$') { $pfad = $Matches[1] }
+    $pfad = $pfad.Replace('/', '\')
+    if ($pfad -notmatch '^(?:[a-z]:\\|\\\\[^\\]+\\[^\\]+(?:\\|$))' -or $pfad -match '^\\\\[?.]\\') {
+        throw 'Gib einen vollständigen Pfad wie D:\Sammlung oder \\Server\Freigabe ein.'
+    }
+    $pfad = [IO.Path]::GetFullPath($pfad)
+    if ($pfad -match '^([a-z]):\\' -and $freigaben.ContainsKey($Matches[1])) {
+        $pfad = $freigaben[$Matches[1]].TrimEnd('\') + $pfad.Substring(2)
+    }
+    $ordner = [IO.DirectoryInfo]::new($pfad)
+    if (-not $ordner.Exists) {
+        throw "Ordner nicht erreichbar: $pfad. Prüfe den Pfad und bei Netzlaufwerken die Verbindung und die Freigaberechte."
+    }
+    return $ordner
+}
+
+function Get-Ordnerauswahl([string]$pfad) {
+    if ([string]::IsNullOrWhiteSpace($pfad)) {
+        $laufwerke = @{}
+        foreach ($laufwerk in [IO.DriveInfo]::GetDrives()) {
+            $laufwerke[$laufwerk.Name] = @{ name = $laufwerk.Name; pfad = $laufwerk.Name }
+        }
+        foreach ($buchstabe in $freigaben.Keys) {
+            $wurzel = '{0}:\' -f $buchstabe
+            $laufwerke[$wurzel] = @{ name = "$wurzel  ($($freigaben[$buchstabe]))"; pfad = $wurzel }
+        }
+        return @{ pfad = ''; eltern = ''; ordner = @($laufwerke.Keys | Sort-Object | ForEach-Object { $laufwerke[$_] }) }
+    }
+    $ordner = Resolve-Quellordner $pfad
+    $kinder = @($ordner.EnumerateDirectories() | Sort-Object Name | ForEach-Object {
+        @{ name = $_.Name; pfad = $_.FullName }
+    })
+    return @{ pfad = $ordner.FullName; eltern = [string]$ordner.Parent.FullName; ordner = $kinder }
+}
+
+function Invoke-Sortierung([string]$pfad, [bool]$vorschau) {
+    $pfad = (Resolve-Quellordner $pfad).FullName
+    $daten = [ordered]@{
+        Geplant = 0; Verschoben = 0; Einsortiert = 0; Warnungen = 0
+        Dateien = [Collections.Generic.List[object]]::new()
+        Hinweise = [Collections.Generic.List[string]]::new()
+    }
+    & $sortierer -Quellordner $pfad -Vorschau:$vorschau -PassThru -Confirm:$false 3>&1 | ForEach-Object {
+        if ($_ -is [Management.Automation.WarningRecord]) {
+            $daten.Warnungen++
+            if ($daten.Hinweise.Count -lt 100) { $daten.Hinweise.Add($_.Message) }
+        } else {
+            $daten[$_.Status]++
+            if ($_.Von -and $daten.Dateien.Count -lt 250) { $daten.Dateien.Add($_) }
+        }
+    }
+    return $daten
+}
+
+$listener = [Net.HttpListener]::new()
+$listener.Prefixes.Add("$ursprung/")
+try {
+    $listener.Start()
+    $aktiv = $true
+    while ($aktiv) {
+        $eingang = $listener.BeginGetContext($null, $null)
+        if (-not $eingang.AsyncWaitHandle.WaitOne([timespan]::FromMinutes(30))) { break }
+        $kontext = $listener.EndGetContext($eingang)
+        $eingang.AsyncWaitHandle.Close()
+        $anfrage = $kontext.Request
+        $antwort = $kontext.Response
+        $antwort.ContentType = 'application/json; charset=utf-8'
+        $antwort.Headers['Cache-Control'] = 'no-store'
+        $antwort.Headers['X-Content-Type-Options'] = 'nosniff'
+        $antwort.Headers['Referrer-Policy'] = 'no-referrer'
+        $antwort.Headers['Content-Security-Policy'] = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+        try {
+            $route = $anfrage.Url.AbsolutePath
+            if ($anfrage.UserHostName -cne "127.0.0.1:$Port") {
+                $antwort.StatusCode = 403
+                $inhalt = '{}'
+            } elseif ($anfrage.HttpMethod -eq 'GET' -and $route -eq '/') {
+                $antwort.ContentType = 'text/html; charset=utf-8'
+                $inhalt = $seite
+            } elseif ($anfrage.HttpMethod -eq 'GET' -and $route -eq '/bereit') {
+                $antwort.ContentType = 'text/plain; charset=utf-8'
+                $inhalt = $Startkennung.ToString()
+            } elseif ($anfrage.HttpMethod -ne 'POST' -or $anfrage.Headers['Origin'] -cne $ursprung -or
+                $anfrage.Headers['X-Sitzung'] -cne $Sitzung.ToString()) {
+                $antwort.StatusCode = 403
+                $inhalt = '{"fehler":"Öffne die Oberfläche über Start.cmd."}'
+            } else {
+                switch ($route) {
+                    { $_ -in '/ordner', '/vorschau', '/verschieben' } {
+                        if ($anfrage.ContentLength64 -lt 0 -or $anfrage.ContentLength64 -gt 131072) {
+                            throw 'Ungültige Pfadangabe.'
+                        }
+                        $leser = [IO.StreamReader]::new($anfrage.InputStream, [Text.Encoding]::UTF8)
+                        try { $pfad = $leser.ReadToEnd() } finally { $leser.Dispose() }
+                        if ($route -eq '/ordner') { $daten = Get-Ordnerauswahl $pfad }
+                        else { $daten = Invoke-Sortierung $pfad ($route -eq '/vorschau') }
+                    }
+                    '/beenden' { $daten = @{}; $aktiv = $false }
+                    default { $daten = @{}; $antwort.StatusCode = 404 }
+                }
+                $inhalt = ConvertTo-Json -InputObject $daten -Depth 4 -Compress
+            }
+        } catch {
+            $antwort.StatusCode = 400
+            $inhalt = ConvertTo-Json @{ fehler = $_.Exception.Message } -Compress
+        }
+        try {
+            $bytes = [Text.Encoding]::UTF8.GetBytes($inhalt)
+            $antwort.ContentLength64 = $bytes.Length
+            $antwort.OutputStream.Write($bytes, 0, $bytes.Length)
+        } catch [Net.HttpListenerException] {
+            Write-Verbose 'Das Browserfenster wurde geschlossen.'
+        } finally { $antwort.Close() }
+    }
+} finally { $listener.Close() }

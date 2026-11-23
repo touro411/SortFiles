@@ -1,0 +1,46 @@
+﻿# Dateisortierer für Windows
+
+Der Dateisortierer durchsucht den gewählten Quellordner samt Unterordnern und verschiebt die Dateien nach Kategorie, Jahr und Monat. Für Dateien vom Juli 2025 sieht die Zielstruktur beispielsweise so aus.
+
+```text
+Quellordner\
+├── Bilder\2025\07\Urlaub.jpg
+├── Videos\2025\07\Ausflug.mp4
+├── Dokumente\2025\07\Rechnung.pdf
+├── Audio\2025\07\Konzert.flac
+└── Andere\2025\07\Archiv.zip
+```
+
+## Mit der Oberfläche starten
+
+1. Doppelklicke auf **Start.cmd** und bestätige die Windows-Abfrage der Benutzerkontensteuerung (UAC). Die CMD-Datei fordert beim Start Administratorrechte für den lokalen Sortierdienst an. Ob Windows einen Dialog zeigt, hängt von den UAC-Einstellungen und den bereits vorhandenen Rechten ab.
+2. Füge in Chrome einen lokalen Pfad wie **D:\Sammlung**, einen Netzlaufwerkspfad wie **Z:\Musik** oder einen UNC-Pfad wie **\\Server\Freigabe\Musik** ins Feld **Quellordner** ein. Auch die Anführungszeichen aus „Als Pfad kopieren“ sind zulässig. Alternativ öffnet **Ordner auswählen …** einen Dialog direkt vor der Seite. Klicke auf ein Laufwerk, öffne bei Bedarf Unterordner und bestätige mit **Diesen Ordner übernehmen**.
+3. Klicke auf **Vorschau anzeigen**, um die geplanten Zielpfade zu prüfen. Die Vorschau liest die Dateien. Alle Änderungen erfolgen erst mit **Dateien verschieben** und deiner Bestätigung.
+4. Über **Sitzung beenden** schließt du den lokalen Dienst. Wenn du nur das Browserfenster schließt, beendet er sich nach 30 Minuten ohne Anfrage.
+
+Voraussetzungen sind Windows, Windows PowerShell 5.1 und Google Chrome. Belasse die Programmdateien zusammen in einem Ordner. Die Webseite und der Sortierdienst laufen auf deinem Rechner.
+
+Beim Start übernimmt das Programm die verbundenen Netzlaufwerke der aufrufenden Windows-Sitzung. Bei der Auswahl eines solchen Laufwerks zeigt das Pfadfeld anschließend die zugehörige UNC-Adresse. Für Netzwerkordner braucht das bei der UAC-Abfrage verwendete Konto Lesezugriff und zum Verschieben auch Schreib- und Löschrechte auf der Freigabe.
+
+## Direkt mit PowerShell sortieren
+
+Öffne Windows PowerShell im Skriptordner. Ersetze den Beispielpfad durch deinen Quellordner. Der erste Aufruf zeigt die Vorschau, der zweite verschiebt die Dateien.
+
+```powershell
+.\Sortiere-Dateien.ps1 -Quellordner 'D:\Sammlung' -WhatIf
+.\Sortiere-Dateien.ps1 -Quellordner 'D:\Sammlung'
+```
+
+Falls die Ausführung lokaler Skripte deaktiviert ist, kannst du sie für das aktuelle PowerShell-Fenster mit `Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned` erlauben. Auf verwalteten Geräten haben Gruppenrichtlinien Vorrang. [Microsoft-Dokumentation zu Ausführungsrichtlinien](https://learn.microsoft.com/de-de/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-5.1)
+
+## Sortierregeln
+
+- **Bilder** umfassen unter anderem JPG, PNG, HEIC und Kamera-Rohbilder wie NEF und CR3.
+- **Videos** umfassen unter anderem MP4, MOV, AVI und MKV.
+- **Dokumente** umfassen unter anderem PDF, Word-, Excel-, PowerPoint- und OpenDocument-Dateien sowie TXT, Markdown, CSV und RTF.
+- **Audio** umfasst unter anderem MP3, WAV, FLAC, AAC, M4A, OGG, Opus und Hörbücher im M4B-Format.
+- **Andere** nimmt Dateien mit unbekannter Endung und Dateien ohne Endung auf. Die Zuordnung der bekannten Endungen steht in der Tabelle `$endungen` im [Sortierskript](./Sortiere-Dateien.ps1).
+- Die Groß- und Kleinschreibung der Dateiendung spielt keine Rolle. Symbolische Links, Verzeichnisverbindungen und die eigenen fünf Programm- und Anleitungsdateien am Installationsort werden beim Durchsuchen übersprungen.
+- Das Windows-Aufnahmedatum hat Vorrang. Fehlt es, zählt das Änderungsdatum. Dies ist bei Dokumenten der übliche Fall. Fehlen beide, verwendet das Skript das älteste verfügbare Datum aus den weiteren Datei- und Metadaten. Fehlt jedes verwendbare Datum, erscheint ein Hinweis und die Datei bleibt am Platz.
+- Beim Verschieben entstehen alle fünf Kategorieordner. Jahres- und zweistellige Monatsordner entstehen nach Bedarf. Auch Dateien in früheren Jahres- und Monatsordnern werden einsortiert. Leere Quellordner bleiben erhalten.
+- Ist der Zielname belegt, erhält die hinzukommende Datei einen Zusatz wie `Rechnung (1).pdf`. Bei einem erneuten Lauf zählt das Skript bereits richtig einsortierte Dateien und lässt sie am Platz.
