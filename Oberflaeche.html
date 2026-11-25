@@ -22,8 +22,8 @@
   .copies label { display: grid; grid-template-columns: auto 1fr auto; align-items: baseline; gap: .65rem; padding: .45rem; margin: 0; font-weight: 400; cursor: pointer; overflow-wrap: anywhere }
   .copies input { min-height: 0; margin: 0; accent-color: #245bad }
   .copies label:has(:checked) { background: #eef3f9 }
-  .copies label::after { content: 'Löschen'; color: #922d29 }
-  .copies label:has(:checked)::after { content: 'Behalten'; color: #194a92; font-weight: 650 }
+  .copies .file::after { content: 'Löschen'; color: #922d29 }
+  .copies .file:has(:checked)::after, .copies:has(.keep-all:checked) .file::after { content: 'Behalten'; color: #194a92; font-weight: 650 }
   .folder { display: inline-block; position: relative; width: 1.5rem; height: 1rem; margin-top: .25rem; border-radius: 2px 3px 3px 3px; background: var(--ink, #2866bb) }
   .folder::before { content: ""; position: absolute; left: 0; top: -.23rem; width: 48%; height: .3rem; border-radius: 2px 3px 0 0; background: inherit }
   h1 { margin: 3.2rem 0 .4rem; font-size: clamp(2.1rem,5vw,3.4rem); letter-spacing: -.055em; line-height: 1.12 }
@@ -132,7 +132,7 @@
     el('sortTool').setAttribute('aria-pressed', String(!duplicates));
     el('duplicateTool').setAttribute('aria-pressed', String(duplicates));
     el('title').textContent = duplicates ? 'Duplikate finden' : 'Dateien sortieren';
-    el('intro').textContent = duplicates ? 'Die Suche überspringt Webdateien wie HTML, PHP, CSS und JavaScript. Wähle in der Vorschau für jede Duplikatgruppe den Pfad aus, an dem die Datei bleiben soll.' : sortIntro;
+    el('intro').textContent = duplicates ? 'Die Suche überspringt Webdateien wie HTML, PHP, CSS und JavaScript. Wähle pro Gruppe eine Datei zum Behalten oder behalte alle Dateien der Gruppe.' : sortIntro;
     el('sortActions').hidden = el('structure').hidden = duplicates;
     el('duplicateActions').hidden = !duplicates;
     resetResults();
@@ -141,7 +141,7 @@
     const locked = busy || ended || !token;
     path.disabled = el('browse').disabled = el('exit').disabled = el('sortTool').disabled = el('duplicateTool').disabled = locked;
     el('scan').disabled = el('preview').disabled = el('move').disabled = locked || !path.value.trim();
-    el('deleteCopies').disabled = locked || !scan?.DeleteCount;
+    el('deleteCopies').disabled = locked || !scan?.keepIndices.some(index => index >= 0);
     el('duplicateList').disabled = locked;
   }
   function status(message, error = false) {
@@ -181,9 +181,27 @@
     }));
     el('result').hidden = false;
   }
+  function selectedTotals() {
+    let count = 0;
+    let bytes = 0;
+    for (const group of scan.Groups) {
+      if (scan.keepIndices[group.Number - 1] === -1) continue;
+      count += group.Delete.length;
+      bytes += group.Delete.length * group.Length;
+    }
+    return {count, bytes};
+  }
+  function updateDuplicatePreview() {
+    const {count, bytes} = selectedTotals();
+    const errors = scan.ReadErrorCount + scan.HashErrorCount;
+    el('duplicateSummary').textContent = scan.ScannedFiles + ' Dateien durchsucht · ' +
+      (scan.GroupCount ? count + (count === 1 ? ' Kopie' : ' Kopien') + ' zum Löschen · ' + bytes.toLocaleString('de-DE') + ' Byte' : 'Keine Duplikate gefunden.') +
+      (errors ? ' · Lesefehler: ' + errors : '');
+    controls();
+  }
   function renderDuplicates(data) {
     const afterDelete = 'DeletedCount' in data;
-    scan = afterDelete ? null : data;
+    scan = afterDelete ? null : {...data, keepIndices: data.Groups.map(() => 0)};
     const list = el('duplicateList');
     list.replaceChildren();
     el('duplicateTitle').textContent = afterDelete ? 'Löschergebnis' : 'Suchergebnis';
@@ -197,35 +215,43 @@
       }
       if (issues.childElementCount) list.append(issues);
     } else {
-      const errors = data.ReadErrorCount + data.HashErrorCount;
-      el('duplicateSummary').textContent = data.ScannedFiles + ' Dateien durchsucht · ' +
-        (data.DeleteCount ? data.DeleteCount + ' Kopien zum Löschen · ' + data.TotalBytes.toLocaleString('de-DE') + ' Byte' : 'Keine Duplikate gefunden.') +
-        (errors ? ' · Lesefehler: ' + errors : '');
+      updateDuplicatePreview();
       for (const group of data.Groups) {
         const details = document.createElement('details');
         details.open = data.GroupCount <= 10;
         const label = document.createElement('summary');
         const files = [group.Keep, ...group.Delete];
-        const updateSummary = file => { label.textContent = file.Name + ' (' + files.length + ' Dateien)'; };
-        updateSummary(group.Keep);
+        const updateSummary = index => {
+          label.textContent = (files[index] || group.Keep).Name + ' (' + files.length + ' Dateien)' +
+            (index === -1 ? ' · Alle behalten' : '');
+        };
+        updateSummary(0);
         const paths = document.createElement('div');
         paths.className = 'copies';
         paths.setAttribute('role', 'radiogroup');
-        paths.setAttribute('aria-label', 'Datei zum Behalten auswählen');
-        for (const [index, file] of files.entries()) {
+        paths.setAttribute('aria-label', 'Auswahl für ' + group.Keep.Name);
+        const addChoice = (index, text) => {
           const row = document.createElement('label');
           const radio = document.createElement('input');
           radio.type = 'radio';
           radio.name = 'keep-' + group.Number;
           radio.value = String(index);
           radio.checked = index === 0;
-          radio.setAttribute('aria-label', file.Path + ' behalten');
-          radio.onchange = () => updateSummary(file);
-          const displayPath = document.createElement('span');
-          displayPath.textContent = file.Path;
-          row.append(radio, displayPath);
+          if (index === -1) radio.className = 'keep-all';
+          else {
+            row.className = 'file';
+            radio.setAttribute('aria-label', text + ' behalten');
+          }
+          radio.onchange = () => {
+            scan.keepIndices[group.Number - 1] = index;
+            updateSummary(index);
+            updateDuplicatePreview();
+          };
+          row.append(radio, document.createTextNode(text));
           paths.append(row);
-        }
+        };
+        addChoice(-1, 'Alle Dateien dieser Gruppe behalten');
+        for (const [index, file] of files.entries()) addChoice(index, file.Path);
         details.append(label, paths);
         list.append(details);
       }
@@ -320,9 +346,10 @@
   el('duplicateTool').onclick = () => selectTool(true);
   el('scan').onclick = () => { resetResults(); run('duplikate/suchen', 'Dateigrößen und Inhalte werden verglichen …'); };
   el('deleteCopies').onclick = () => {
-    if (scan && confirm(scan.DeleteCount + ' Kopien in diesem Ordner endgültig löschen?\n\n' + scan.RootPath + '\n\nDie als „Behalten“ markierten Dateien bleiben erhalten.')) {
-      const keepIndices = Array.from(el('duplicateList').querySelectorAll('input:checked'), radio => Number(radio.value));
-      run('duplikate/loeschen', 'Kopien werden erneut geprüft und gelöscht …', JSON.stringify({scanId: scan.ScanId, confirmed: true, keepIndices}));
+    if (!scan) return;
+    const {count} = selectedTotals();
+    if (count && confirm(count + (count === 1 ? ' Kopie' : ' Kopien') + ' in diesem Ordner endgültig löschen?\n\n' + scan.RootPath + '\n\nDie als „Behalten“ markierten Dateien bleiben erhalten.')) {
+      run('duplikate/loeschen', 'Kopien werden erneut geprüft und gelöscht …', JSON.stringify({scanId: scan.ScanId, confirmed: true, keepIndices: scan.keepIndices}));
     }
   };
   if (start.has('pfad')) path.value = start.get('pfad');

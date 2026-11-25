@@ -181,11 +181,11 @@ function Invoke-ConfirmedDeletion {
     $hasSelection = $PSBoundParameters.ContainsKey('KeepIndices')
     if ($hasSelection) {
         if ($KeepIndices -isnot [array] -or $KeepIndices.Count -ne $scan.Groups.Count) {
-            throw 'Wähle für jede Duplikatgruppe genau eine Datei zum Behalten aus.'
+            throw 'Wähle für jede Duplikatgruppe eine Datei oder alle Dateien zum Behalten aus.'
         }
         foreach ($group in $scan.Groups) {
             $index = $KeepIndices[$group.Number - 1]
-            if (($index -isnot [int] -and $index -isnot [long]) -or $index -lt 0 -or $index -gt $group.Delete.Count) {
+            if (($index -isnot [int] -and $index -isnot [long]) -or $index -lt -1 -or $index -gt $group.Delete.Count) {
                 throw 'Die ausgewählte Datei gehört nicht zur angezeigten Duplikatgruppe.'
             }
         }
@@ -194,7 +194,9 @@ function Invoke-ConfirmedDeletion {
     foreach ($group in $scan.Groups) {
         $keep = $group.Keep
         $copies = $group.Delete
-        if ($hasSelection -and ($index = $KeepIndices[$group.Number - 1]) -gt 0) {
+        $index = if ($hasSelection) { $KeepIndices[$group.Number - 1] } else { 0 }
+        if ($index -eq -1) { continue } # Alle Dateien dieser Gruppe behalten.
+        if ($index -gt 0) {
             $keep = $group.Delete[$index - 1]
             $copies = $group.Delete.Clone()
             $copies[$index - 1] = $group.Keep

@@ -27,7 +27,9 @@ Wähle oben neben **Dateisortierer** die **Duplikatsuche**. Beide Werkzeuge verw
 
 Die Duplikatsuche überspringt typische Webdateien anhand ihrer Endung, darunter HTML, PHP, CSS, JavaScript und Vorlagen wie Twig. So bleiben inhaltsgleiche Kopien in verschiedenen Website-Ordnern erhalten. Die vollständige Liste steht unter `$webEndungen` in [Dateipruefung.psm1](./Dateipruefung.psm1).
 
-In der Vorschau ist pro Gruppe der alphabetisch erste Pfad zum **Behalten** vorausgewählt. Klicke auf den gewünschten Dateipfad, um die Auswahl zu ändern. Alle übrigen Pfade der Gruppe sind mit **Löschen** markiert. Erst mit **Angezeigte Kopien löschen …** und deiner Bestätigung entfernst du diese Kopien endgültig. Vor dem Löschen prüft das Werkzeug die Inhalte erneut. Hat sich die ausgewählte Datei geändert oder fehlt sie, wird die gesamte Gruppe übersprungen. Das Ergebnis nennt gelöschte und übersprungene Dateien sowie Fehler.
+In der Vorschau ist pro Gruppe der alphabetisch erste Pfad zum **Behalten** vorausgewählt. Wähle einen anderen Dateipfad oder **Alle Dateien dieser Gruppe behalten**, wenn jede Kopie an ihrem Platz bleiben soll. Die Vorschau zeigt die Anzahl und Gesamtgröße der zum Löschen markierten Kopien für deine aktuelle Auswahl.
+
+Erst mit **Angezeigte Kopien löschen …** und deiner Bestätigung entfernst du die markierten Kopien endgültig. Vor dem Löschen prüft das Werkzeug die Inhalte erneut. Hat sich die ausgewählte Datei geändert oder fehlt sie, wird die gesamte Gruppe übersprungen. Das Ergebnis nennt gelöschte und übersprungene Dateien sowie Fehler.
 
 Du kannst auch direkt mit `.\delete_duplicates.ps1` in die Duplikatsuche einsteigen. Mit `-InitialPath 'D:\Sammlung'` belegst du den Quellordner vor.
 
